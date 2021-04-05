@@ -58,7 +58,7 @@ public class PythonPlugin implements LanguagePlugin, Closeable {
 	}
 
 
-	private void updateChildrenNodes(CstRoot root, Map<String, CstNode> nodeByAddress, Map<String, CstNode> fallbackByAddress,
+private void updateChildrenNodes(CstRoot root, Map<String, CstNode> nodeByAddress, Map<String, CstNode> fallbackByAddress,
 									 Map<String, HashSet<String>> childrenByAddress) {
 
 		for (Map.Entry<String, HashSet<String>> parent : childrenByAddress.entrySet()) {
@@ -136,15 +136,15 @@ public class PythonPlugin implements LanguagePlugin, Closeable {
 
 			String sourceFolder = "";
 			if (parent != null) {
-				sourceFolder = parent.getPath();
-				System.out.println(sourceFolder);
-				for (SourceFile file : sources.getFilesFromPath(Paths.get(sourceFolder))) {
-					if (!isValidPythonFile(file.getPath())) {
-						continue;
-					}
+				//sourceFolder = parent.getPath();
+				//System.out.println(sourceFolder);
+				//for (SourceFile file : sources.getFilesFromPath(Paths.get(sourceFolder), this.tempDir)) {
+				//	if (!isValidPythonFile(file.getPath())) {
+				//		continue;
+				//	}
 
-					additionalFiles.add(file);
-				}
+				//	additionalFiles.add(file);
+				//}
 			}
 		}
 
@@ -168,10 +168,14 @@ public class PythonPlugin implements LanguagePlugin, Closeable {
 			int nodeCounter = 1;
 
 			for (SourceFile sourceFile : sourceFiles) {
-				String temp = Paths.get(rootFolder.toString(),sourceFile.getPath()).toString();
-				String temp1 = temp.substring(temp.indexOf("/")+1);
-				String[] arrOfStr = temp1.split("-");
-				temp1 = arrOfStr[0]+"/";
+				//String temp = Paths.get(rootFolder.toString(),sourceFile.getPath()).toString();
+				//String temp1 = temp.substring(temp.indexOf("/")+1);
+				//System.out.println("1: "+temp1);
+				//String[] arrOfStr = temp1.split("-");
+				//temp1 = arrOfStr[0]+"/";
+				//System.out.println("2: "+temp1);
+				//String[] arrOfStr = temp1.split("-");
+				//temp1 = arrOfStr[0]+"/";
 				fileProcessed.put(sourceFile.getPath(), true);
 
 				Node[] astNodes = this.execParser(rootFolder.toString(), sourceFile.getPath());
@@ -189,11 +193,15 @@ public class PythonPlugin implements LanguagePlugin, Closeable {
 					if (node.getParent() != null) {
 						node.setNamespace(null);
 						// initialize if key not present
-						childrenByAddress= AddtoArraylist(childrenByAddress, temp1, node);
+						if (!childrenByAddress.containsKey(node.getParentAddress())) {
+							childrenByAddress.put(node.getParentAddress(), new HashSet<>());
+						}
+
+						childrenByAddress.get(node.getParentAddress()).add(node.getAddress());
 					}
 
 					// save call graph information
-					if (node.getType().equals(NodeType.FUNCTION) && node.getFunctionCalls() != null) {
+					if ((node.getType().equals(NodeType.FUNCTION) || node.getType().equals(NodeType.FILE)) && node.getFunctionCalls() != null) {
 						// initialize if key not present
 						for (String functionname : node.getFunctionCalls()) {
 							if (!functionCalls.containsKey(functionname)) {
@@ -202,8 +210,7 @@ public class PythonPlugin implements LanguagePlugin, Closeable {
 								functionCalls.get(functionname).add(node.getAddress());
 						}
 					}
-
-					if(node.getType().equals(NodeType.FILE)) {
+					if (node.getType().equals(NodeType.FILE)) {
 						root.addNode(cstNode);
 					}
 				}
@@ -237,19 +244,10 @@ public class PythonPlugin implements LanguagePlugin, Closeable {
 	}
 
 	private Map<String, HashSet<String>> AddtoArraylist(Map<String, HashSet<String>> arraylist, String temp1, Node node){
-		if(!node.getParent().contains(".py")){
-			temp1 = "";
+		if (!arraylist.containsKey(node.getAddress())) {
+				arraylist.put(node.getAddress(), new HashSet<>());
 		}
-		if (!arraylist.containsKey(temp1+node.getParent())) {
-			if(node.getParent().contains(".py"))
-				arraylist.put(temp1+node.getParent(), new HashSet<>());
-			else if(!node.getParent().contains(".py"))
-				arraylist.put(node.getParent(), new HashSet<>());
-		}
-		if(node.getParent().contains(".py"))
-			arraylist.get(temp1+node.getParent()).add(node.getAddress());
-		else
-			arraylist.get(node.getParent()).add(node.getAddress());
+		arraylist.get(node.getAddress()).add(node.getAddress());
 		return arraylist;
 	}
 
@@ -257,10 +255,7 @@ public class PythonPlugin implements LanguagePlugin, Closeable {
 		CstNode cstNode = new CstNode(node.getId());
 		cstNode.setType(node.getType());
 		cstNode.setSimpleName(node.getName());
-		if(node.getType().equals("File"))
-			cstNode.setNamespace(node.getNamespace());
-		else
-			cstNode.setNamespace(null);
+		cstNode.setNamespace(node.getNamespace());
 		cstNode.setLocation(new Location(filePath, node.getStart(), node.getEnd(), node.getLine(), node.getBodyBegin(), node.getBodyEnd()));
 
 		if (node.getType().equals(NodeType.CLASS)) {
