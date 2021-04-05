@@ -17,17 +17,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public class PythonPlugin implements LanguagePlugin, Closeable {
 	private File tempDir = null;
 	private String parserPath;
-	private String envpath;
 
 	public PythonPlugin() throws Exception {
-		this.parserPath = "C:\\Users\\Asper\\Projects\\Git\\RefDiff\\refdiff-python\\src\\main\\resources\\parser.py";
-		this.envpath = "C:\\Users\\Asper\\Projects\\Git\\RefDiff\\refdiff-python\\venv\\Scripts\\python.exe";
+		this.parserPath = this.getParserPath();
 	}
 
 	public PythonPlugin(File tempDir) {
 		this.tempDir = tempDir;
-		this.parserPath = "C:\\Users\\Asper\\Projects\\Git\\RefDiff\\refdiff-python\\src\\main\\resources\\parser.py";
-		this.envpath = "C:\\Users\\Asper\\Projects\\Git\\RefDiff\\refdiff-python\\venv\\Scripts\\python.exe";
+		this.parserPath = this.getParserPath();
 	}
 
 	public String getParserPath() {
@@ -36,11 +33,13 @@ public class PythonPlugin implements LanguagePlugin, Closeable {
 			return parser;
 		}
 
-		return PythonPlugin.class.getClassLoader().getResource("parser.py").getPath(); // TODO load dependencies in Java
+		return PythonPlugin.class.getClassLoader().getResource("parser.py").getPath();
 	}
 
 	public Node[] execParser(String rootFolder, String path) throws IOException {
-		ProcessBuilder builder = new ProcessBuilder(envpath, parserPath,"-f", Paths.get(rootFolder, path).toString());
+		ProcessBuilder builder = new ProcessBuilder(parserPath,	"--file", Paths.get(rootFolder, path).toString());
+		Map<String, String> env = builder.environment();
+        env.put("PYTHONPATH", PythonPlugin.class.getClassLoader().getResource("dependencies").getPath());
 		Process proc = builder.start();
 		Node[] nodes = new Node[0];
 		try {
@@ -57,6 +56,7 @@ public class PythonPlugin implements LanguagePlugin, Closeable {
 
 		return nodes;
 	}
+
 
 	private void updateChildrenNodes(CstRoot root, Map<String, CstNode> nodeByAddress, Map<String, CstNode> fallbackByAddress,
 									 Map<String, HashSet<String>> childrenByAddress) {
@@ -136,15 +136,15 @@ public class PythonPlugin implements LanguagePlugin, Closeable {
 
 			String sourceFolder = "";
 			if (parent != null) {
-				//sourceFolder = parent.getPath();
-				//System.out.println(sourceFolder);
-				//for (SourceFile file : sources.getFilesFromPath(Paths.get(sourceFolder), this.tempDir)) {
-				//	if (!isValidPythonFile(file.getPath())) {
-				//		continue;
-				//	}
+				sourceFolder = parent.getPath();
+				System.out.println(sourceFolder);
+				for (SourceFile file : sources.getFilesFromPath(Paths.get(sourceFolder))) {
+					if (!isValidPythonFile(file.getPath())) {
+						continue;
+					}
 
-				//	additionalFiles.add(file);
-				//}
+					additionalFiles.add(file);
+				}
 			}
 		}
 
@@ -170,10 +170,8 @@ public class PythonPlugin implements LanguagePlugin, Closeable {
 			for (SourceFile sourceFile : sourceFiles) {
 				String temp = Paths.get(rootFolder.toString(),sourceFile.getPath()).toString();
 				String temp1 = temp.substring(temp.indexOf("/")+1);
-				//System.out.println("1: "+temp1);
 				String[] arrOfStr = temp1.split("-");
 				temp1 = arrOfStr[0]+"/";
-				//System.out.println("2: "+temp1);
 				fileProcessed.put(sourceFile.getPath(), true);
 
 				Node[] astNodes = this.execParser(rootFolder.toString(), sourceFile.getPath());
@@ -181,6 +179,7 @@ public class PythonPlugin implements LanguagePlugin, Closeable {
 					node.setId(nodeCounter++);
 
 					if (node.getType().equals(NodeType.FILE)) {
+						node.setNamespace(temp1);
 						root.addTokenizedFile(tokenizeSourceFile(node, sources, sourceFile));
 					}
 
@@ -188,26 +187,25 @@ public class PythonPlugin implements LanguagePlugin, Closeable {
 					// save parent information
 					nodeByAddress.put(node.getAddress(), cstNode);
 					if (node.getParent() != null) {
+						node.setNamespace(null);
 						// initialize if key not present
-						if (!childrenByAddress.containsKey(node.getParentAddress())) {
-							childrenByAddress.put(node.getParentAddress(), new HashSet<>());
-						}
-
-						childrenByAddress.get(node.getParentAddress()).add(node.getAddress());
+						childrenByAddress= AddtoArraylist(childrenByAddress, temp1, node);
 					}
 
 					// save call graph information
-					if ((node.getType().equals(NodeType.FUNCTION) || node.getType().equals(NodeType.FILE)) && node.getFunctionCalls() != null) {
+					if (node.getType().equals(NodeType.FUNCTION) && node.getFunctionCalls() != null) {
 						// initialize if key not present
-						if (!functionCalls.containsKey(node.getAddress())) {
-							functionCalls.put(node.getAddress(), new HashSet<>());
+						for (String functionname : node.getFunctionCalls()) {
+							if (!functionCalls.containsKey(functionname)) {
+									functionCalls.put(functionname, new HashSet<>());
+							}
+								functionCalls.get(functionname).add(node.getAddress());
 						}
-						functionCalls.get(node.getAddress()).addAll(node.getFunctionCalls());
-					}
-					if (node.getType().equals(NodeType.FILE)) {
-						root.addNode(cstNode);
 					}
 
+					if(node.getType().equals(NodeType.FILE)) {
+						root.addNode(cstNode);
+					}
 				}
 			}
 
@@ -239,10 +237,19 @@ public class PythonPlugin implements LanguagePlugin, Closeable {
 	}
 
 	private Map<String, HashSet<String>> AddtoArraylist(Map<String, HashSet<String>> arraylist, String temp1, Node node){
-		if (!arraylist.containsKey(node.getAddress())) {
-				arraylist.put(node.getAddress(), new HashSet<>());
+		if(!node.getParent().contains(".py")){
+			temp1 = "";
 		}
-		arraylist.get(node.getAddress()).add(node.getAddress());
+		if (!arraylist.containsKey(temp1+node.getParent())) {
+			if(node.getParent().contains(".py"))
+				arraylist.put(temp1+node.getParent(), new HashSet<>());
+			else if(!node.getParent().contains(".py"))
+				arraylist.put(node.getParent(), new HashSet<>());
+		}
+		if(node.getParent().contains(".py"))
+			arraylist.get(temp1+node.getParent()).add(node.getAddress());
+		else
+			arraylist.get(node.getParent()).add(node.getAddress());
 		return arraylist;
 	}
 
@@ -250,7 +257,10 @@ public class PythonPlugin implements LanguagePlugin, Closeable {
 		CstNode cstNode = new CstNode(node.getId());
 		cstNode.setType(node.getType());
 		cstNode.setSimpleName(node.getName());
-		cstNode.setNamespace(node.getNamespace());
+		if(node.getType().equals("File"))
+			cstNode.setNamespace(node.getNamespace());
+		else
+			cstNode.setNamespace(null);
 		cstNode.setLocation(new Location(filePath, node.getStart(), node.getEnd(), node.getLine(), node.getBodyBegin(), node.getBodyEnd()));
 
 		if (node.getType().equals(NodeType.CLASS)) {
