@@ -221,16 +221,9 @@ public class Node {
 	}
 
 	public String getAddress() {
-		if(this.namespace.endsWith("/"))
+		if (this.getType().equals("File"))
 			return this.namespace+this.name;
 		else
-			return this.namespace +'/'+ this.name;
-	}
-	public String getParentAddress() {
-		return this.parent;
-		//if(this.namespace.endsWith("/"))
-		//	return this.namespace+this.parent;
-		//else
-		//	return this.namespace +'/'+ this.parent;
+			return this.name;
 	}
 }
