@@ -21,28 +21,21 @@ def get_tokenz(node):  # pass a node and it will return the tokens
         isStart = True
         line = 0
         a = atok.get_tokens(node, include_extra=False)
-        hasbody= False
         for i in a:
             if isStart:
                 line = i.start[0]
                 isStart = False
             if i.string.strip() and i.string != "\n": # not empty token
                 tokens.append("{}-{}".format(i.startpos, i.endpos))
-        if int(tokens[-1].split('-')[1])>0:
-            hasbody =True
         jsonData.append({
             "type": "File",
             "name": file_name[1],
-            "function_calls": list(),
             "line": line,
-            "namespace": '',
+            "namespace": file_name[0]+"\\",
             "parent": None,
             "start": tokens[0].split('-')[0],
             "end": tokens[-1].split('-')[1],
-            "tokens": tokens,
-            "bodyBegin" : int(tokens[0].split('-')[0]),
-            "bodyEnd" : int(tokens[-1].split('-')[1]),
-            "has_body": hasbody
+            "tokens": tokens
         })
     else:
         a = atok.get_tokens(node, include_extra=False)
@@ -79,7 +72,6 @@ def get_all_functions(node):
             stack.append(child)
             if isinstance(child, astroid.FunctionDef):
                 callsList.append(child.name)
-                callsList.append(child)
     return callsList
 
 
@@ -96,53 +88,7 @@ def get_real_parent(node):  # this returns weather the nodes parent is a functio
 
             node = parent
     except:
-        return False
-
-
-def addFunction2JSON(node, key, value):
-    try:
-        parent = get_real_parent(node)
-        if parent:
-            for i in jsonData:
-                if i['name'] == parent.name:
-                    a = i[key]
-                    i[key] = a + value
-    except:
         pass
-
-
-def addSlash(text1, text2):
-    try:
-        string = ""
-        if not text1.startswith('/'):
-            text1= '/{0}'.format(text1)
-        if (text2.startswith('/')) or (text1.endswith('/')):
-            string = text1 +""+ text2
-            return string
-        else:
-            if text2=="":
-                string = text1
-            else:
-                string = text1+'/'+text2
-            return string
-    except:
-        pass
-
-def searchnamespace(node, namespace =""):
-    try:
-        parent = node.parent
-        if isinstance(parent, astroid.Module):
-            namespace = addSlash(file_name[1],namespace)
-            return namespace
-
-        if isinstance(parent, astroid.ClassDef):
-            node = parent
-            namespace = addSlash(node.name, namespace)
-            namespace = searchnamespace(node, namespace)
-            return namespace
-
-    except:
-        return False
 
 
 def getFunctionParent(node):
@@ -169,8 +115,8 @@ def getFunctionParent(node):
                     "type": "Function",
                     "name": child.name,
                     "parameter_names": [a.name for a in child.args.args],
-                    "parent": searchnamespace(child),
-                    "namespace": searchnamespace(child),
+                    "parent": child.parent.name,
+                    "namespace": '',
                     "function_calls": list(),
                     "line": child.lineno,
                     "has_body": has_body
@@ -180,30 +126,21 @@ def getFunctionParent(node):
                     "type": "Class",
                     "name": child.name,
                     "parameter_names": [None],
-                    "parent": searchnamespace(child),
-                    "namespace": searchnamespace(child),
+                    "parent": child.parent.name,
+                    "namespace": '',
                     "line": child.lineno,
                     "has_body": has_body
                 })
 
             if isinstance(child, astroid.Call):
                 try:
-                    name = ""
-                    if child.func._other_fields[0] == "attrname":
-                        name = child.func.attrname
-                    elif child.func._other_fields[0] == "name":
-                        name = child.func.name
-                    if name in functions:
-                        index = functions.index(name)
-                        index = functions[index+1]
+                    if child.func.name in functions:
                         parent = get_real_parent(child)
-                        if isinstance(parent, astroid.FunctionDef) or isinstance(parent, astroid.Module):
-
+                        if parent.is_function:
                             for i in jsonData:
-                                temp = addSlash(searchnamespace(index),name)
-                                if i['name'] == parent.name and (temp not in i['function_calls']):
+                                if i['name'] == parent.name:
                                     a = i['function_calls']
-                                    i['function_calls'] = a + [temp]
+                                    i['function_calls'] = a + [child.func.name]
                 except:
                     pass
     return functionNodes
@@ -223,7 +160,7 @@ getFunctionParent(parsedCode)
 [get_tokenz(n) for n in ast.walk(atok.tree) if isinstance(n, ast.FunctionDef) or isinstance(n, ast.ClassDef)]  # gets tokens for functions
 
 for i in jsonData:
-    if i['type'] == "Function" or i['type'] == "File":
+    if i['type']=="Function":
         if not i['function_calls']:
             i['function_calls'] = None
 
