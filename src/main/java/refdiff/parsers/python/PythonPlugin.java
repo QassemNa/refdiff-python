@@ -168,12 +168,14 @@ private void updateChildrenNodes(CstRoot root, Map<String, CstNode> nodeByAddres
 			int nodeCounter = 1;
 
 			for (SourceFile sourceFile : sourceFiles) {
-				String temp = Paths.get(rootFolder.toString(),sourceFile.getPath()).toString();
-				String temp1 = temp.substring(temp.indexOf("/")+1);
+				//String temp = Paths.get(rootFolder.toString(),sourceFile.getPath()).toString();
+				//String temp1 = temp.substring(temp.indexOf("/")+1);
 				//System.out.println("1: "+temp1);
-				String[] arrOfStr = temp1.split("-");
-				temp1 = arrOfStr[0]+"/";
+				//String[] arrOfStr = temp1.split("-");
+				//temp1 = arrOfStr[0]+"/";
 				//System.out.println("2: "+temp1);
+				//String[] arrOfStr = temp1.split("-");
+				//temp1 = arrOfStr[0]+"/";
 				fileProcessed.put(sourceFile.getPath(), true);
 
 				Node[] astNodes = this.execParser(rootFolder.toString(), sourceFile.getPath());
@@ -181,6 +183,7 @@ private void updateChildrenNodes(CstRoot root, Map<String, CstNode> nodeByAddres
 					node.setId(nodeCounter++);
 
 					if (node.getType().equals(NodeType.FILE)) {
+						node.setNamespace(temp1);
 						root.addTokenizedFile(tokenizeSourceFile(node, sources, sourceFile));
 					}
 
@@ -188,6 +191,7 @@ private void updateChildrenNodes(CstRoot root, Map<String, CstNode> nodeByAddres
 					// save parent information
 					nodeByAddress.put(node.getAddress(), cstNode);
 					if (node.getParent() != null) {
+						node.setNamespace(null);
 						// initialize if key not present
 						if (!childrenByAddress.containsKey(node.getParentAddress())) {
 							childrenByAddress.put(node.getParentAddress(), new HashSet<>());
@@ -199,15 +203,16 @@ private void updateChildrenNodes(CstRoot root, Map<String, CstNode> nodeByAddres
 					// save call graph information
 					if ((node.getType().equals(NodeType.FUNCTION) || node.getType().equals(NodeType.FILE)) && node.getFunctionCalls() != null) {
 						// initialize if key not present
-						if (!functionCalls.containsKey(node.getAddress())) {
-							functionCalls.put(node.getAddress(), new HashSet<>());
+						for (String functionname : node.getFunctionCalls()) {
+							if (!functionCalls.containsKey(functionname)) {
+									functionCalls.put(functionname, new HashSet<>());
+							}
+								functionCalls.get(functionname).add(node.getAddress());
 						}
-						functionCalls.get(node.getAddress()).addAll(node.getFunctionCalls());
 					}
 					if (node.getType().equals(NodeType.FILE)) {
 						root.addNode(cstNode);
 					}
-
 				}
 			}
 
