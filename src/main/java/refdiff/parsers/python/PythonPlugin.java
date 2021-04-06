@@ -183,7 +183,6 @@ private void updateChildrenNodes(CstRoot root, Map<String, CstNode> nodeByAddres
 					node.setId(nodeCounter++);
 
 					if (node.getType().equals(NodeType.FILE)) {
-						node.setNamespace(temp1);
 						root.addTokenizedFile(tokenizeSourceFile(node, sources, sourceFile));
 					}
 
